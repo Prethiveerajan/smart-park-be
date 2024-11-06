@@ -99,12 +99,27 @@ async def book_parking(booking_request: BookingRequest):
         parking_id = booking_request.parking_id
         user_name = booking_request.user_name
         contact = booking_request.contact
+        email = booking_request.email
         user_id = booking_request.user_id
 
         # Call the function to store booking data
-        booking_message = book_parking_space(parking_id, user_name, contact, user_id)
+        booking_message = book_parking_space(parking_id, user_name, contact, email,user_id)
         logger.info(f"Booking successful: {booking_message}")
         return {"message": booking_message}
     except Exception as e:
         logger.error(f"Error during booking: {e}")
         raise HTTPException(status_code=500, detail="Booking failed") from e
+
+# @router.post("/api/booking")
+# async def book_parking(request: BookingRequest):
+#     try:
+#         available_spaces = await book_parking_space(
+#             request.parking_id,
+#             request.user_name,
+#             request.contact,
+#             request.email,   # Pass email to the service
+#             request.user_id
+#         )
+#         return {"message": "Booking successful", "available_spaces": available_spaces}
+#     except Exception as e:
+#         raise HTTPException(status_code=400, detail=str(e))

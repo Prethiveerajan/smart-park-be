@@ -30,11 +30,12 @@ def get_parking_status():
 def get_space_utils():
     return get_available_spaces()  # Call the correct function to get available spaces
 
-def book_parking_space(parking_id, user_name, contact, user_id):
+def book_parking_space(parking_id, user_name, contact,email: str, user_id:str):
     booking_data = {
         "parking_id": parking_id,
         "user_name": user_name,
         "contact": contact,
+        "email": email,
         "user_id": user_id,
         "status": "occupied"
     }
@@ -42,3 +43,21 @@ def book_parking_space(parking_id, user_name, contact, user_id):
     users_collection.insert_one(booking_data)
     # Optionally, you can retrieve the updated available spaces count if needed
     return "Booking saved successfully"
+
+# async def book_parking_space(parking_id: int, user_name: str, contact: str, email: str, user_id: str):
+#     # Create a booking document with email included
+#     booking_data = {
+#         "parking_id": parking_id,
+#         "user_name": user_name,
+#         "contact": contact,
+#         "email": email,  # New email field
+#         "user_id": user_id
+#     }
+    
+#     # Insert the booking document into the collection
+#     result = await users_collection.insert_one(booking_data)
+#     print("Booking inserted with ID:", result.inserted_id)
+    
+#     # Assuming available spaces are updated here and returned after booking
+#     available_spaces = get_available_spaces()  # Adjust if needed
+#     return available_spaces
