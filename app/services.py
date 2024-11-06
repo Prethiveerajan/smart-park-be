@@ -3,7 +3,10 @@ import os
 from fastapi import BackgroundTasks
 from app.putils import process_parking_video, get_available_spaces  # Ensure correct import
 from app.utils import ParkClassifier  # Import your ParkClassifier
+from app.db import users_collection
+import logging
 
+logger = logging.getLogger(__name__)
 classifier = ParkClassifier()
 
 def process_video(video_path,background_tasks: BackgroundTasks):
@@ -26,3 +29,16 @@ def get_parking_status():
 
 def get_space_utils():
     return get_available_spaces()  # Call the correct function to get available spaces
+
+def book_parking_space(parking_id, user_name, contact, user_id):
+    booking_data = {
+        "parking_id": parking_id,
+        "user_name": user_name,
+        "contact": contact,
+        "user_id": user_id,
+        "status": "occupied"
+    }
+    # Insert booking data into MongoDB
+    users_collection.insert_one(booking_data)
+    # Optionally, you can retrieve the updated available spaces count if needed
+    return "Booking saved successfully"
