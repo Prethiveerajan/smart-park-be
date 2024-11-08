@@ -5,6 +5,7 @@ from fastapi import UploadFile, File
 from sse_starlette.sse import EventSourceResponse
 from app.services import process_video_putils, process_video_utils, get_parking_status, get_space_utils
 import logging
+import jwt,random
 from fastapi import HTTPException
 from app.services import book_parking_space
 from app.services import register_user, authenticate_user
@@ -12,8 +13,11 @@ from fastapi import Depends
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends
 from app.models import BookingRequest, UserRegisterRequest, LoginRequest
-from app.services import register_user, authenticate_user, reset_password
-
+from app.services import register_user, authenticate_user, reset_password,generate_reset_code_token
+from app.db import users_collection, parking_collection
+import smtplib
+import bcrypt
+from app.config import SECRET_KEY
 
 router = APIRouter()
 # router = APIRouter()
@@ -31,6 +35,14 @@ class PasswordResetRequest(BaseModel):
     email: str
     new_password: str
 
+class PasswordResetVerifyRequest(BaseModel):
+    token: str
+    reset_code: int
+    new_password: str
+
+# Define a schema for the email request
+class EmailRequest(BaseModel):
+    email: str
 
 
 @router.get("/parking/status1")
@@ -115,10 +127,7 @@ async def book_parking(booking_request: BookingRequest):
         logger.error(f"Error during booking: {e}")
         raise HTTPException(status_code=500, detail="Booking failed") from e
     
-    
-    
 
-# tration endpoint
 @router.post("/register")
 async def register_user_route(user: UserRegisterRequest):
     try:
@@ -142,17 +151,39 @@ async def login_user_route(login_data: LoginRequest):
         logger.error(f"Login failed: {e}")
         raise HTTPException(status_code=500, detail="Login failed")
 
-# Password reset endpoint
-# from pydantic import BaseModel
-
-
-@router.post("/forgot-password")
-async def forgot_password_route(request: PasswordResetRequest):
+@router.post("/forgot-password/verify")
+async def verify_reset_code_and_reset_password(request: PasswordResetVerifyRequest):
     try:
-        reset_password(request.email, request.new_password)
-        return {"message": "Password reset successfully!"}
-    except HTTPException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.detail)
+        # Decode and validate the JWT token
+        payload = jwt.decode(request.token, SECRET_KEY, algorithms=["HS256"])
+        email = payload["sub"]
+        code_from_token = payload["reset_code"]
+
+        # Check if the code matches
+        if request.reset_code != code_from_token:
+            raise HTTPException(status_code=400, detail="Invalid reset code")
+
+        # Reset the password
+        hashed_password = bcrypt.hashpw(request.new_password.encode("utf-8"), bcrypt.gensalt())
+        users_collection.update_one({"email": email}, {"$set": {"password": hashed_password}})
+
+        return {"message": "Password reset successfully"}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=400, detail="Reset code has expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=400, detail="Invalid token")
     except Exception as e:
         logger.error(f"Password reset failed: {e}")
         raise HTTPException(status_code=500, detail="Password reset failed")
+
+
+@router.post("/forgot-password/request")
+async def request_password_reset(request: EmailRequest):
+    email = request.email  # Extract the email from the request object
+    user = users_collection.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Generate a reset code token and send it via email
+    token = generate_reset_code_token(email)
+    return {"message": "Password reset code sent", "token": token}

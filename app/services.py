@@ -17,6 +17,9 @@ from fastapi import HTTPException
 from app.models import UserRegisterRequest
 from typing import Optional
 from app.db import users_collection, parking_collection
+import smtplib
+
+from app.config import SECRET_KEY
 
 
 # Load environment variables from .env file
@@ -60,6 +63,7 @@ smtp_server = os.getenv('SMTP_SERVER')
 smtp_port = int(os.getenv('SMTP_PORT'))
 smtp_user = os.getenv('SMTP_USER')
 smtp_password = os.getenv('SMTP_PASSWORD')
+# SECRET_KEY = os.getenv('SECRET_KEY')
 
 
 
@@ -127,7 +131,7 @@ def book_parking_space(parking_id, user_name, contact, email, user_id):
         "status": "occupied"
     }
     # Insert booking data into MongoDB
-    users_collection.insert_one(booking_data)
+    parking_collection.insert_one(booking_data)
     
     # Send SMS notification to the contact number provided
     send_sms(contact, user_name)
@@ -175,3 +179,45 @@ def reset_password(email: str, new_password: str):
     users_collection.update_one({"email": email}, {"$set": {"password": hashed_password}})
     
     return {"message": "Password reset successfully"}
+
+
+
+  # Set a strong secret key in your environment variables
+
+def generate_reset_code_token(email: str) -> str:
+    reset_code = random.randint(100000, 999999)  # Generate a 6-digit reset code
+    expiration = datetime.utcnow() + timedelta(minutes=10)  # Token expires in 10 minutes
+
+    token_data = {
+        "sub": email,
+        "reset_code": reset_code,
+        "exp": expiration,
+    }
+    token = jwt.encode(token_data, SECRET_KEY, algorithm="HS256")
+
+    # Send the reset code to the user's email
+    send_reset_code_email(email, reset_code)
+
+    return token
+
+def send_reset_code_email(to_email: str, reset_code: int):
+    """Function to send the reset code to the user's email."""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        msg['Subject'] = 'Your Password Reset Code'
+        
+        body = f"Hello,\n\nYour password reset code is: {reset_code}\n\nThe code is valid for 10 minutes."
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # Connect to SMTP server and send the email
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.sendmail(smtp_user, to_email, msg.as_string())
+        server.quit()
+        
+        logging.info(f"Reset code email sent to {to_email}")
+    except Exception as e:
+        logging.error(f"Failed to send reset code email: {e}")
