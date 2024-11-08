@@ -3,14 +3,20 @@ import os
 from fastapi import BackgroundTasks
 from app.putils import process_parking_video, get_available_spaces  # Ensure correct import
 from app.utils import ParkClassifier  # Import your ParkClassifier
-from app.db import users_collection
 import logging
-import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from twilio.rest import Client
 import re
 from dotenv import load_dotenv
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt,random
+from datetime import datetime, timedelta
+import bcrypt
+from fastapi import HTTPException
+from app.models import UserRegisterRequest
+from typing import Optional
+from app.db import users_collection, parking_collection
 
 
 # Load environment variables from .env file
@@ -130,3 +136,42 @@ def book_parking_space(parking_id, user_name, contact, email, user_id):
     send_email(email, user_name, booking_data)
     
     return "Booking saved successfully, and notifications sent (SMS and Email)"
+
+
+def register_user(user: UserRegisterRequest):
+    existing_user = users_collection.find_one({"email": user.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
+    
+    users_collection.insert_one({
+        "email": user.email,
+        "password": hashed_password,
+        "full_name": user.full_name
+    })
+    return {"message": "User registered successfully"}
+
+# Function to authenticate user (login)
+def authenticate_user(email: str, password: str):
+    user = users_collection.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid credentials")
+    
+    # Check if the password matches
+    if not bcrypt.checkpw(password.encode('utf-8'), user["password"]):
+        raise HTTPException(status_code=400, detail="Invalid credentials")
+    
+    return {"message": "User authenticated successfully"}
+
+# Function to reset the password
+def reset_password(email: str, new_password: str):
+    user = users_collection.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+    
+    hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+    
+    users_collection.update_one({"email": email}, {"$set": {"password": hashed_password}})
+    
+    return {"message": "Password reset successfully"}

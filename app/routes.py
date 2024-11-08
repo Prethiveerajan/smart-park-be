@@ -1,15 +1,36 @@
 import os
 import asyncio
 from fastapi import WebSocket
-from fastapi import APIRouter, UploadFile, File
+from fastapi import UploadFile, File
 from sse_starlette.sse import EventSourceResponse
 from app.services import process_video_putils, process_video_utils, get_parking_status, get_space_utils
 import logging
 from fastapi import HTTPException
 from app.services import book_parking_space
-from app.models import BookingRequest
+from app.services import register_user, authenticate_user
+from fastapi import Depends
+from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Depends
+from app.models import BookingRequest, UserRegisterRequest, LoginRequest
+from app.services import register_user, authenticate_user, reset_password
+
 
 router = APIRouter()
+# router = APIRouter()
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: str
+
+class PasswordResetRequest(BaseModel):
+    email: str
+    new_password: str
+
 
 
 @router.get("/parking/status1")
@@ -93,3 +114,45 @@ async def book_parking(booking_request: BookingRequest):
     except Exception as e:
         logger.error(f"Error during booking: {e}")
         raise HTTPException(status_code=500, detail="Booking failed") from e
+    
+    
+    
+
+# tration endpoint
+@router.post("/register")
+async def register_user_route(user: UserRegisterRequest):
+    try:
+        register_user(user)
+        return {"message": "User registered successfully!"}
+    except HTTPException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+    except Exception as e:
+        logger.error(f"Registration failed: {e}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+# User login endpoint
+@router.post("/login")
+async def login_user_route(login_data: LoginRequest):
+    try:
+        response = authenticate_user(login_data.email, login_data.password)
+        return response  # Return a token or user details as needed
+    except HTTPException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+    except Exception as e:
+        logger.error(f"Login failed: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+# Password reset endpoint
+# from pydantic import BaseModel
+
+
+@router.post("/forgot-password")
+async def forgot_password_route(request: PasswordResetRequest):
+    try:
+        reset_password(request.email, request.new_password)
+        return {"message": "Password reset successfully!"}
+    except HTTPException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+    except Exception as e:
+        logger.error(f"Password reset failed: {e}")
+        raise HTTPException(status_code=500, detail="Password reset failed")

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import router as parking_router
 from app.db import get_db_connection
+from app.routes import router
 app = FastAPI()
 
 # Add CORS middleware
@@ -13,6 +14,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(router)
 @app.on_event("startup")
 async def startup():
     # Check MongoDB connection on startup
